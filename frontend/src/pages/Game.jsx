@@ -9,6 +9,7 @@ export default function Game() {
   const [history, setHistory] = useState([])
   const [selectedHits, setSelectedHits] = useState(0)
   const [colors, setColors] = useState(4)
+  const [gameWon, setGameWon] = useState(false)
 
   useEffect(() => {
     const queryParams = new URLSearchParams(window.location.search)
@@ -17,26 +18,42 @@ export default function Game() {
 
     axios.post('http://localhost:5000/iniciar', { num_elementos: numColors })
       .then(() => fetchProposal())
+      .catch(err => console.error("Error al iniciar el juego:", err))
   }, [])
 
   const fetchProposal = () => {
     axios.get('http://localhost:5000/propuesta')
-      .then(res => setProposal(res.data.propuesta))
+      .then(res => {
+        if (!gameWon) {
+          setProposal(res.data.propuesta)
+        }
+      })
+      .catch(err => console.error("Error al obtener propuesta:", err))
   }
 
   const submitResponse = () => {
+    if (gameWon) return
+
     axios.post('http://localhost:5000/responder', {
       propuesta: proposal,
       aciertos: selectedHits
     }).then(res => {
-      setHistory([...history, { proposal, hits: selectedHits }])
-      if (res.data.status === 'Ganado') {
-        alert(`¡La máquina adivinó en ${history.length + 1} intentos!`)
+      console.log("Respuesta del servidor:", res.data) // Para debugging
+      
+      const newHistory = [...history, { proposal, hits: selectedHits }]
+      setHistory(newHistory)
+      
+      if (res.data.status && res.data.status.toLowerCase() === 'ganado') {
+        setGameWon(true)
+        alert(`¡La máquina adivinó en ${newHistory.length} intentos!`)
         navigate('/')
       } else {
         fetchProposal()
         setSelectedHits(0)
       }
+    }).catch(err => {
+      console.error("Error al enviar respuesta:", err)
+      alert("Ocurrió un error al procesar tu respuesta")
     })
   }
 
@@ -55,12 +72,15 @@ export default function Game() {
         <select 
           value={selectedHits} 
           onChange={(e) => setSelectedHits(parseInt(e.target.value))}
+          disabled={gameWon}
         >
           {[...Array(colors + 1).keys()].map(num => (
             <option key={num} value={num}>{num}</option>
           ))}
         </select>
-        <button onClick={submitResponse}>Enviar</button>
+        <button onClick={submitResponse} disabled={gameWon}>
+          {gameWon ? '¡Ganado!' : 'Enviar'}
+        </button>
       </div>
       
       <div className="history">
